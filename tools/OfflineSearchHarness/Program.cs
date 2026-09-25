@@ -77,7 +77,23 @@ internal static class Program
                 {
                     UnattendedTestRequest request = GeneratedScenarioSetup.ReadRequest(options.RequestPath);
                     generated = GeneratedScenarioSetup.Prepare(
-                        request, Path.Combine(options.OutputDirectory, "evidence"));
+                        request, Path.Combine(options.OutputDirectory, "evidence"),
+                        GeneratedScenarioSetup.ReadActId(options.RequestPath));
+                    if (generated.ActId != null)
+                    {
+                        var act = MegaCrit.Sts2.Core.Models.ModelDb.ActsByIndex[request.ActIndexForTest]
+                            .Single(candidate => candidate.Id.Entry == generated.ActId);
+                        File.WriteAllText(Path.Combine(options.OutputDirectory, "act-catalog.json"),
+                            JsonSerializer.Serialize(new
+                            {
+                                actId = act.Id.Entry,
+                                encounters = act.AllEncounters.Select(encounter => new
+                                {
+                                    encounterId = encounter.Id.Entry,
+                                    roomType = encounter.RoomType.ToString(),
+                                }).ToArray(),
+                            }, Json));
+                    }
                     session = generated.Session;
                     return $"character={generated.Request.CharacterId} encounter={generated.Request.EncounterId} "
                         + $"generated={generated.Resolved != null}";
@@ -125,6 +141,9 @@ internal static class Program
             }
 
             reached = "M1";
+            if (options.ExportRootPath != null)
+                RootExport.Write(combat!, (MegaCrit.Sts2.Core.Runs.RunState)combat!.RunState,
+                    options.ExportRootPath);
             if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_HISTORY_CHECKS") == "1")
                 HistoryCounterChecks.Run(combat!, options.OutputDirectory);
             payload["budget"] = DescribeBudget(options);
@@ -384,6 +403,7 @@ internal sealed record HarnessOptions
           --portfolio-model <p>  加载可选选择器 JSON；不匹配的版本回退原组合
           --milestone <M1|M2>    跑到哪个里程碑（默认 M2）
           --out <dir>            产物目录（默认 <workspace>/offline）
+          --export-root <path>   玩家第一回合根状态 JSON（schema 1）
           --workspace <dir>      工作区目录（默认 .local/offline-harness）
           --language <code>      本地化语言码（默认 eng）
           --verbose-game-log     把游戏 info/debug 日志也打到标准输出
@@ -445,6 +465,7 @@ internal sealed record HarnessOptions
     public string Milestone { get; init; } = "M2";
     public string WorkspaceDirectory { get; init; } = string.Empty;
     public string OutputDirectory { get; init; } = string.Empty;
+    public string? ExportRootPath { get; init; }
     public bool VerboseGameLog { get; init; }
     public string Language { get; init; } = "eng";
 
@@ -477,7 +498,7 @@ internal sealed record HarnessOptions
         string? portfolioModelPath = null;
         string potionPolicy = "Smart", milestone = "M2", language = "eng";
         string profile = "Custom", searchMode = "Evaluate", label = "offline";
-        string? output = null, requestPath = null;
+        string? output = null, requestPath = null, exportRootPath = null;
         string workspace = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "../../../../../.local/offline-harness"));
         bool verbose = false;
@@ -549,6 +570,7 @@ internal sealed record HarnessOptions
                 case "--portfolio-model": portfolioModelPath = Path.GetFullPath(Value()); break;
                 case "--milestone": milestone = Value(); break;
                 case "--out": output = Value(); break;
+                case "--export-root": exportRootPath = Path.GetFullPath(Value()); break;
                 case "--workspace": workspace = Value(); break;
                 case "--language": language = Value(); break;
                 case "--verbose-game-log": verbose = true; break;
@@ -664,6 +686,7 @@ internal sealed record HarnessOptions
             Milestone = milestone,
             WorkspaceDirectory = Path.GetFullPath(workspace),
             OutputDirectory = Path.GetFullPath(output ?? Path.Combine(workspace, "offline")),
+            ExportRootPath = exportRootPath,
             VerboseGameLog = verbose,
             Language = language,
         };

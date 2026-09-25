@@ -19,6 +19,7 @@ plan 是一个数组，每项：
   enableNoGcRegion                        可选，true 时走 Runtime 的 No-GC 回收生命周期
   noGcRegionBudgetGigabytes               可选，No-GC 区域预算（默认沿用模组设置，通常 16）
   dll                                     可选，换掉运行时加载的 CombatSolver.dll
+  exportRoot                              可选，true 时输出 <out>/root.json（schema 1）
 
 用法：
   python3 tools/OfflineSearchHarness/run_plan.py --plan <plan.json> --workspace <dir> [--workers 4]
@@ -61,6 +62,8 @@ def build_command(item, out, harness):
                       ('transpositionEntryLimit', '--transposition-entry-limit')):
         if item.get(key) is not None:
             args += [flag, str(item[key])]
+    if item.get('exportRoot'):
+        args += ['--export-root', str(out / 'root.json')]
     if item.get('usePortfolio'):
         args.append('--use-portfolio')
     if item.get('measurePhases'):

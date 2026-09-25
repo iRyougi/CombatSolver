@@ -27,12 +27,15 @@ internal sealed class GeneratedScenarioSetup
     public UnattendedTestRunner.OfflineScenarioSession Session { get; }
     public ResolvedGeneratedCombatScenario? Resolved { get; }
     public UnattendedTestRequest Request => Session.Request;
+    public string? ActId { get; }
 
     private GeneratedScenarioSetup(
-        UnattendedTestRunner.OfflineScenarioSession session, ResolvedGeneratedCombatScenario? resolved)
+        UnattendedTestRunner.OfflineScenarioSession session, ResolvedGeneratedCombatScenario? resolved,
+        string? actId)
     {
         Session = session;
         Resolved = resolved;
+        ActId = actId;
     }
 
     public static UnattendedTestRequest ReadRequest(string path)
@@ -40,6 +43,12 @@ internal sealed class GeneratedScenarioSetup
             File.ReadAllText(path), UnattendedTestFiles.JsonOptions)
            ?? throw new InvalidDataException($"请求文件为空：{path}。");
 
+    public static string? ReadActId(string path)
+    {
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path));
+        return document.RootElement.TryGetProperty("actId", out JsonElement value)
+            ? value.GetString() : null;
+    }
     /// <summary>请求是 class 不是 record，只能走 JSON 往返改字段。</summary>
     public static UnattendedTestRequest WithEvidenceDirectory(UnattendedTestRequest request, string directory)
     {
@@ -50,7 +59,7 @@ internal sealed class GeneratedScenarioSetup
     }
 
     /// <summary>照 <c>PrepareGeneratedScenario</c>：读规格 → <c>Resolve</c> → <c>Apply</c>，并落盘同名产物。</summary>
-    public static GeneratedScenarioSetup Prepare(UnattendedTestRequest request, string evidenceDirectory)
+    public static GeneratedScenarioSetup Prepare(UnattendedTestRequest request, string evidenceDirectory, string? actId)
     {
         if (request.GeneratedScenarioPath is not { } path)
         {
@@ -58,7 +67,7 @@ internal sealed class GeneratedScenarioSetup
                 || request.AdditionalMonsterIds.Length > 0 || request.ModifierIds.Length > 0)
                 throw new InvalidDataException("离线固定夹具暂不支持快照恢复、追加怪物或自定义规则。");
             return new GeneratedScenarioSetup(UnattendedTestRunner.OfflineScenarioSession.Create(
-                WithEvidenceDirectory(request, evidenceDirectory)), null);
+                WithEvidenceDirectory(request, evidenceDirectory)), null, actId);
         }
         var options = JsonSerializer.Deserialize<GeneratedCombatScenarioOptions>(
             File.ReadAllText(path), GeneratedCombatScenario.JsonOptions)
@@ -74,7 +83,7 @@ internal sealed class GeneratedScenarioSetup
         session.WriteGeneratedArtifact("generated-scenario.catalog.json", resolved.Catalog);
         session.WriteGeneratedArtifact("generated-scenario.request.json", applied);
         session.AddCompletedCheck("GeneratedScenario:Resolved:NativePools:IndependentGeneratorRng");
-        return new GeneratedScenarioSetup(session, resolved);
+        return new GeneratedScenarioSetup(session, resolved, actId);
     }
 
     /// <summary>建跑局、注入装备、进房。返回的作用域在整场战斗期间都不能释放。</summary>
@@ -91,11 +100,21 @@ internal sealed class GeneratedScenarioSetup
             if (RunManager.Instance.IsInProgress)
                 throw new InvalidOperationException("已经有进行中的跑局。");
 
+            if (ActId != null && (!ModelDb.ActsByIndex[request.ActIndexForTest].Any(act => act.Id.Entry == ActId)
+                || !ModelDb.ActsByIndex[request.ActIndexForTest]
+                    .Single(act => act.Id.Entry == ActId).AllEncounters.Any(item => item.Id == encounter.Id)))
+                throw new InvalidDataException($"Encounter {encounter.Id.Entry} is not in act {ActId}.");
+            if (encounter.RoomType != request.TargetRoomType)
+                throw new InvalidDataException($"Encounter {encounter.Id.Entry} room type {encounter.RoomType} does not match {request.TargetRoomType}.");
             HarnessLog.Trace("gen.start_run");
             UnlockState unlockState = SaveManager.Instance.GenerateUnlockStateFromProgress();
+            List<ActModel> acts = ActModel.GetDefaultList().Select(act => act.ToMutable()).ToList();
+            if (ActId != null)
+                acts[request.ActIndexForTest] = ModelDb.ActsByIndex[request.ActIndexForTest]
+                    .Single(act => act.Id.Entry == ActId).ToMutable();
             RunState runState = RunState.CreateForNewRun(
                 [Player.CreateForNewRun(character, unlockState, 1uL)],
-                ActModel.GetDefaultList().Select(act => act.ToMutable()).ToList(),
+                acts,
                 [],
                 GameMode.Standard,
                 request.Ascension,
