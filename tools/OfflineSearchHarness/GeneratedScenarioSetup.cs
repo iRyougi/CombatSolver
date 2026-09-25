@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CombatSolver;
+using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Players;
@@ -131,11 +132,23 @@ internal sealed class GeneratedScenarioSetup
                     throw new InvalidOperationException($"测试幕索引超出范围：{request.ActIndexForTest}。");
                 await RunManager.Instance.SetActInternal(request.ActIndexForTest);
             }
+            if (request.TargetActFloor is { } targetActFloor)
+                runState.ActFloor = targetActFloor;
             HarnessLog.Trace("gen.act_applied");
 
             Player runPlayer = LocalContext.GetMe(runState)
                 ?? throw new InvalidOperationException("创建跑局后找不到本地玩家。");
 
+            // Preserve-native requests describe run state before combat. Ordinary fixed
+            // fixtures apply InitialPlayerMaxHp later in InjectInitialStateAsync.
+            if (request.PreserveNativeCombatStateForTest && request.InitialPlayerMaxHp is { } initialMaxHp)
+                await CreatureCmd.SetMaxHp(runPlayer.Creature, initialMaxHp);
+            if (request.PreCombatPlayerCurrentHpOverride is { } preCombatHp)
+            {
+                if (preCombatHp < 1 || preCombatHp > runPlayer.Creature.MaxHp)
+                    throw new InvalidDataException($"Pre-combat HP {preCombatHp} is outside 1..{runPlayer.Creature.MaxHp}.");
+                runPlayer.Creature.SetCurrentHpInternal(preCombatHp);
+            }
             Session.PrepareStartingRelics(runPlayer);
             foreach (UnattendedRelicInjection injection in request.Relics)
                 await UnattendedTestRunner.OfflineScenarioSession.InjectRelicAsync(runPlayer, injection);
