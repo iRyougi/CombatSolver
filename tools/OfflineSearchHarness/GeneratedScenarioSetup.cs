@@ -88,7 +88,7 @@ internal sealed class GeneratedScenarioSetup
     }
 
     /// <summary>建跑局、注入装备、进房。返回的作用域在整场战斗期间都不能释放。</summary>
-    public async Task<IDisposable?> EnterCombatRoomAsync()
+    public async Task<IDisposable?> EnterCombatRoomAsync(string? entryPath = null)
     {
         UnattendedTestRequest request = Request;
         IDisposable? choiceScope = Session.BeginSetupChoices();
@@ -176,6 +176,8 @@ internal sealed class GeneratedScenarioSetup
                     RoomType.Boss => MapPointType.Boss,
                     _ => throw new InvalidOperationException($"只支持战斗房间，收到 {request.TargetRoomType}。"),
                 };
+            if (entryPath is not null)
+                EntryExport.Write(runState, mutableEncounter, request.TargetRoomType, entryPath);
             await RunManager.Instance.EnterRoomDebug(
                 request.TargetRoomType, targetMapPointType, mutableEncounter);
             HarnessLog.Trace("gen.entered_room");

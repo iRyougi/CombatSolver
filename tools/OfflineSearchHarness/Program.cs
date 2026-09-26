@@ -107,7 +107,8 @@ internal static class Program
 
                 Step(steps, "G1.2 建跑局、注入装备、进遭遇战房间", () =>
                 {
-                    Task<IDisposable?> enter = generated!.EnterCombatRoomAsync();
+                    Task<IDisposable?> enter = generated!.EnterCombatRoomAsync(
+                        options.ExportRootPath is null ? null : Path.Combine(options.OutputDirectory, "entry.json"));
                     loop.RunUntilCompleted(enter, TimeSpan.FromSeconds(300), "生成场景进房");
                     choiceScope = enter.GetAwaiter().GetResult();
                     return $"pumped={loop.PumpedCallbacks}";
@@ -129,7 +130,8 @@ internal static class Program
                 session = UnattendedTestRunner.OfflineScenarioSession.Create(new UnattendedTestRequest());
                 Step(steps, "M1.1 建跑局并进入遭遇战房间", () =>
                 {
-                    Task enter = OfflineCombat.EnterCombatRoomAsync(options.Scenario);
+                    Task enter = OfflineCombat.EnterCombatRoomAsync(options.Scenario,
+                        options.ExportRootPath is null ? null : Path.Combine(options.OutputDirectory, "entry.json"));
                     loop.RunUntilCompleted(enter, TimeSpan.FromSeconds(180), "EnterRoomDebug");
                     return $"pumped={loop.PumpedCallbacks}";
                 });
