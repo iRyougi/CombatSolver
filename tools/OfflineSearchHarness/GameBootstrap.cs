@@ -3,6 +3,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Helpers;
+using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Modding;
@@ -67,6 +68,11 @@ internal static class GameBootstrap
         Patch(typeof(LocString), nameof(LocString.Exists), prefix: nameof(LocExistsPrefix),
             note: "LocString.Exists(table,key) -> true（同上）",
             args: [typeof(string), typeof(string)]);
+
+        // All-unlock Neow can show SilkenTress, whose hover tip loads a Godot texture.
+        // Event hover tips are presentation data; the option and its effect remain native.
+        Patch(typeof(RelicModel), "get_HoverTipsExcludingRelic", prefix: nameof(EmptyHoverTipsPrefix),
+            note: "RelicModel.HoverTipsExcludingRelic -> empty (offline event presentation)");
 
         // 3) 资源预载全是 Godot 资源加载；战斗建立本身不需要（怪物节点、立绘只在有 NCombatRoom 时才用）。
         foreach (string loader in new[] { "LoadRunAssets", "LoadActAssets", "LoadRoomCombatAssets" })
@@ -346,6 +352,12 @@ internal static class GameBootstrap
     private static bool CompletedTaskPrefix(ref Task __result)
     {
         __result = Task.CompletedTask;
+        return false;
+    }
+
+    private static bool EmptyHoverTipsPrefix(ref IEnumerable<IHoverTip> __result)
+    {
+        __result = Array.Empty<IHoverTip>();
         return false;
     }
 
