@@ -205,6 +205,11 @@ internal static class Program
                 File.WriteAllText(
                     Path.Combine(options.OutputDirectory, "route.json"),
                     JsonSerializer.Serialize(outcome.RouteActions, UnattendedTestFiles.JsonOptions));
+                if (options.ExportTracePath != null)
+                    throw new NotSupportedException(
+                        "B1-PENDING-025: complete native trace cannot be exported because "
+                        + "SearchPathObserver does not expose B2/B3/B4 triggers. "
+                        + $"Partial evidence: {options.ExportTracePath}.partial.json");
 
                 reached = "M2";
                 if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_ANCILLARY_CHECKS") == "1")
@@ -404,6 +409,7 @@ internal sealed record HarnessOptions
           --milestone <M1|M2>    跑到哪个里程碑（默认 M2）
           --out <dir>            产物目录（默认 <workspace>/offline）
           --export-root <path>   玩家第一回合根状态 JSON（schema 1）
+          --export-trace <path>  导出已观察到的路线/保留候选到 <path>.partial.json；完整触发清单待 B1-PENDING-025
           --workspace <dir>      工作区目录（默认 .local/offline-harness）
           --language <code>      本地化语言码（默认 eng）
           --verbose-game-log     把游戏 info/debug 日志也打到标准输出
@@ -466,6 +472,7 @@ internal sealed record HarnessOptions
     public string WorkspaceDirectory { get; init; } = string.Empty;
     public string OutputDirectory { get; init; } = string.Empty;
     public string? ExportRootPath { get; init; }
+    public string? ExportTracePath { get; init; }
     public bool VerboseGameLog { get; init; }
     public string Language { get; init; } = "eng";
 
@@ -498,7 +505,7 @@ internal sealed record HarnessOptions
         string? portfolioModelPath = null;
         string potionPolicy = "Smart", milestone = "M2", language = "eng";
         string profile = "Custom", searchMode = "Evaluate", label = "offline";
-        string? output = null, requestPath = null, exportRootPath = null;
+        string? output = null, requestPath = null, exportRootPath = null, exportTracePath = null;
         string workspace = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "../../../../../.local/offline-harness"));
         bool verbose = false;
@@ -571,6 +578,7 @@ internal sealed record HarnessOptions
                 case "--milestone": milestone = Value(); break;
                 case "--out": output = Value(); break;
                 case "--export-root": exportRootPath = Path.GetFullPath(Value()); break;
+                case "--export-trace": exportTracePath = Path.GetFullPath(Value()); break;
                 case "--workspace": workspace = Value(); break;
                 case "--language": language = Value(); break;
                 case "--verbose-game-log": verbose = true; break;
@@ -583,6 +591,8 @@ internal sealed record HarnessOptions
             throw new ArgumentException("--profile 只接受 Low|Medium|High|VeryHigh|Custom。");
         if (searchMode is not ("Evaluate" or "Coordinator"))
             throw new ArgumentException("--search-mode 只接受 Evaluate 或 Coordinator。");
+        if (exportTracePath != null && (searchMode != "Evaluate" || dop != 1 || milestone != "M2"))
+            throw new ArgumentException("--export-trace 需要 Evaluate、--dop 1 和 M2。");
         if (orderingObservationLimit is < 0 or > 100000 || orderingObservationLimit > 0 && searchMode != "Evaluate")
             throw new ArgumentException("--observe-ordering 仅支持 Evaluate，范围 0..100000。");
         if (orderingWatchedStatesPath != null && orderingObservationLimit == 0)
@@ -687,6 +697,7 @@ internal sealed record HarnessOptions
             WorkspaceDirectory = Path.GetFullPath(workspace),
             OutputDirectory = Path.GetFullPath(output ?? Path.Combine(workspace, "offline")),
             ExportRootPath = exportRootPath,
+            ExportTracePath = exportTracePath,
             VerboseGameLog = verbose,
             Language = language,
         };

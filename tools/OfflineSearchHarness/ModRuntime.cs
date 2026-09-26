@@ -409,9 +409,25 @@ internal static class ModRuntime
         using OrderingObservations? orderingObservations = options.OrderingObservationLimit > 0
             ? new OrderingObservations(options.OutputDirectory, options.OrderingObservationLimit,
                 options.OrderingWatchedStatesPath) : null;
-        if (orderingObservations != null)
+        using NativeTraceObservations? nativeTraceObservations = options.ExportTracePath == null
+            ? null : new NativeTraceObservations(options.ExportTracePath);
+        SearchPathObserver? pathObserver = orderingObservations?.Observer ?? nativeTraceObservations?.Observer;
+        if (orderingObservations != null && nativeTraceObservations != null)
+        {
+            SearchPathObserver ordering = orderingObservations.Observer;
+            SearchPathObserver trace = nativeTraceObservations.Observer;
+            pathObserver = new SearchPathObserver(
+                state => ordering.WantsState(state) || trace.WantsState(state),
+                observation =>
+                {
+                    ordering.Observe(observation);
+                    trace.Observe(observation);
+                },
+                state => ordering.WantsRetentionPool(state) || trace.WantsRetentionPool(state));
+        }
+        if (pathObserver != null)
             policy = policy with { Diagnostics = new SearchDiagnosticsSink(
-                policy.Diagnostics.Info, policy.Diagnostics.Debug, orderingObservations.Observer) };
+                policy.Diagnostics.Info, policy.Diagnostics.Debug, pathObserver) };
         List<BeamPortfolioObservation> observations = [];
         if (options.ObservePortfolio || options.PortfolioModelPath != null)
         {
@@ -493,6 +509,7 @@ internal static class ModRuntime
         if (options.SearchMode == "Coordinator" && policy.MeasurePhasePerformance)
             LastPhasePerformance = SolverDiagnostics.DescribeSearchPhasePerformance(result);
         orderingObservations?.WriteSelectedPath(options.OutputDirectory, result);
+        nativeTraceObservations?.WritePartial(result);
         HarnessLog.Trace("solved");
         watch.Stop();
         File.WriteAllText(Path.Combine(options.OutputDirectory, "quality.json"), JsonSerializer.Serialize(new
