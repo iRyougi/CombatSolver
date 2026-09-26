@@ -25,7 +25,7 @@ internal sealed record HarnessScenario(
 /// </summary>
 internal static class OfflineCombat
 {
-    public static async Task EnterCombatRoomAsync(HarnessScenario scenario)
+    public static async Task EnterCombatRoomAsync(HarnessScenario scenario, string? entryPath = null)
     {
         CharacterModel character = ResolveUnique(ModelDb.AllCharacters, scenario.CharacterId, "角色");
         EncounterModel encounter = ResolveUnique(
@@ -63,6 +63,8 @@ internal static class OfflineCombat
         HarnessLog.Trace("act_index_applied");
         EncounterModel mutableEncounter = encounter.ToMutable();
         HarnessLog.Trace("encounter_mutable");
+        if (entryPath is not null)
+            EntryExport.Write(runState, mutableEncounter, RoomType.Monster, entryPath);
         await RunManager.Instance.EnterRoomDebug(
             RoomType.Monster,
             MapPointType.Unassigned,
