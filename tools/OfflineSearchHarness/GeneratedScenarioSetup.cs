@@ -108,7 +108,7 @@ internal sealed class GeneratedScenarioSetup
             if (encounter.RoomType != request.TargetRoomType)
                 throw new InvalidDataException($"Encounter {encounter.Id.Entry} room type {encounter.RoomType} does not match {request.TargetRoomType}.");
             HarnessLog.Trace("gen.start_run");
-            UnlockState unlockState = SaveManager.Instance.GenerateUnlockStateFromProgress();
+            UnlockState unlockState = UnlockState.all;
             List<ActModel> acts = ActModel.GetDefaultList().Select(act => act.ToMutable()).ToList();
             if (ActId != null)
                 acts[request.ActIndexForTest] = ModelDb.ActsByIndex[request.ActIndexForTest]

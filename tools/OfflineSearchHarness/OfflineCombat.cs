@@ -34,7 +34,7 @@ internal static class OfflineCombat
         if (RunManager.Instance.IsInProgress)
             throw new InvalidOperationException("已经有进行中的跑局。");
 
-        UnlockState unlockState = SaveManager.Instance.GenerateUnlockStateFromProgress();
+        UnlockState unlockState = UnlockState.all;
         RunState runState = RunState.CreateForNewRun(
             [Player.CreateForNewRun(character, unlockState, 1uL)],
             ModelDb.ActsByIndex is { } ? ActModel.GetDefaultList().Select(act => act.ToMutable()).ToList() : [],
