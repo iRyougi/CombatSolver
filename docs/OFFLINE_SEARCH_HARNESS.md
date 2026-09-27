@@ -54,6 +54,12 @@ dotnet tools/OfflineSearchHarness/bin/Release/net9.0/OfflineSearchHarness.dll \
 | `--no-gc-region-budget-gigabytes <double>` | No-GC 区域预算（十进制 GB，1..256）；只在开启上一项时生效 |
 | `--signal-ballast-mb <int>` | 进 No-GC scope 后先持有 N MiB 活对象；只用于制造受控内存压力，0=关闭 |
 
+### B1i 原版门控轨迹
+
+用 `--search-mode Evaluate --dop 1 --milestone M2 --export-trace <trace.json>` 为单根导出原版路线及 B2/B3 门控。成功完成时写 `trace.json`（schemaVersion 2、complete=true、去重排序的 triggered/entered）和相邻的 `trace.json.observations.jsonl`。triggered 表示实际改动了后续搜索会读的保留、预算或证据状态；entered 表示机制已开始实际工作，但可能未生效。未给此选项时观察器为空，不产生门控记录。
+
+门控集合覆盖本次 Evaluate 搜索；节点评估与候选明细只来自 GlobalRetention 观察点，`unobservedSteps` 列出没有该类明细的路线步骤。`complete=true` 只说明搜索正常结束且门控集合已收集，不保证每一步都有候选明细。导出会增加内存和分配，不把其耗时、GC 或内存数字用作性能结论。
+
 超时定位可设置 `OFFLINE_HARNESS_STREAM_DIAGNOSTICS=1`：现有 Info 诊断同时写到标准输出；Coordinator 还每秒至多输出一次现有进度消息中的阶段、局部展开、配置额度和回合层等值，进程被外部结束时仍可保留已经写出的记录。进度的 `reviewed_worldlines` 不是模拟转移数，也不能替代完成结果的请求级 `TotalExpanded` / `TotalTransitions`。该模式会启用进度回调及额外输出，可能改变耗时、分配和墙钟截断，只用于定位，不能作为性能或最终质量样本。默认不开启；普通批量对照须保持关闭。
 
 启用阶段测量时，`BEAM_WIDTH_PORTFOLIO_MEMBER_START` 在进入成员前记录实际运行序号、宽度、次段/基础分/能力承诺身份，以及有效节点/时间额度。`run_index` 只计算实际运行的成员，不能当作包含跳过项的最终成员表索引。即使后续成员超时，配合同步诊断也可识别正在执行的成员；不能仅凭“正在精炼路线”的进度文案推断策略身份。

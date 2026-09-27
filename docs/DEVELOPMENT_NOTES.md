@@ -1,5 +1,10 @@
 # CombatSolver 开发笔记与未来构想
 
+## B1i 原版求解器门控轨迹（2026-09-27）
+
+- 为 sts2-ai 的 B1 移植差分，在固定父提交 cf79aefa 上加入只读 B2/B3 门控观察器；离线宿主 Evaluate/DOP1 可导出完整搜索的 triggered/entered 集合。观察器使用 AsyncLocal 随求解 Task 传递，未启用导出时为空，不改变搜索候选、排序或预算。
+- 触发口径包括会被后续搜索读取的租约、暂定准入、缓存和探针预算；纯 dropped/considered 遥测不计。GlobalRetention 候选明细尚有未观测路线步骤，单独由 unobservedSteps 报告。使用方法与限制见 [离线搜索宿主](OFFLINE_SEARCH_HARNESS.md)；逐根差分证据由 sts2-ai 的 B1i 执行报告归档。
+
 ## 0.46.4：战损路线筛选与 Loadout 兼容（2026-09-25）
 
 - 本机 `godot.log` 确认 Loadout `v0.5.8` 与求解器均已加载；独立战斗日志在首回合根捕获处报 `IncompatibleGameplayModException`。原因是怪物能力召唤订阅者的旧版本门禁，并非当前战斗已配置怪物能力。实际安装的 `v0.5.8` 与保留的 `v0.5.6` 程序集在 `PowerGiverSummonHook`、公开 `GetCountersSnapshot` 及怪物召唤能力施加逻辑上相同。

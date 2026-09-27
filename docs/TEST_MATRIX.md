@@ -1,5 +1,10 @@
 # CombatSolver 测试清单
 
+## B1i：原版 B2/B3 门控轨迹（2026-09-27）
+
+- fork 源码 `959ecc6c3939c2b64862c554ecad31cecc677416` 的 Release 主工程与离线宿主均编译成功，0 警告、0 错误；相对父提交 `cf79aefa4e91c8bf033d2e0340ecf7210c4e4e76` 的固定 v3 语料逐根结果见 sts2-ai Plan 09-B1 修订执行报告及 `archive/09-b1i-native-triggers`。
+- `trace.json` 的 `complete=true` 证明本次搜索和门控集合导出已完成；`unobservedSteps` 仍标出 GlobalRetention 候选明细未覆盖的路线步骤。离线差分不能替代可见游戏内部署或 DOP>1 验收。
+
 ## 0.46.4：战损路线筛选与 Loadout 兼容（2026-09-25）
 
 - 本机最新独立战斗日志：`SEARCH_SETUP_FAILURE stage=combat_root_snapshot`，异常是 `PowerGiver summon powers are configured or this Loadout version is not verified`；`godot.log` 证实求解器 `0.46.4` 与 Loadout `v0.5.8` 均已加载。实际 `v0.5.8` 的召唤钩子和公开怪物能力计数读取，与保留的 `v0.5.6` 程序集反编译结果一致。
