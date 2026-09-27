@@ -62,6 +62,7 @@ internal sealed partial class CombatBeamSolver
         }
         if (maximumRecurringPeriod == 0)
             return AttachCycleProbeLease(child);
+        SearchTriggers.Enter("B2:AttachCycleSchedulingEvidence");
 
         Span<StateFingerprint> actionKeys =
             stackalloc StateFingerprint[MaximumDetectedCyclePeriodActions * 2];
@@ -308,6 +309,7 @@ internal sealed partial class CombatBeamSolver
         // collection. Scheduling metadata may therefore be attached in place without changing
         // any simulator-state ownership or exposing a partial node to another worker.
         child.Cycle = cycle;
+        SearchTriggers.Report("B2:AttachCycleSchedulingEvidence");
         return child;
     }
 
@@ -323,6 +325,7 @@ internal sealed partial class CombatBeamSolver
             .ToArray();
         if (propagated.Length == 0)
             return;
+        SearchTriggers.Enter("B2:AnnotateCycleExitProgress");
         CycleProbeTracker[] trackers = new CycleProbeTracker[propagated.Length];
         trackers[0] = lease.Tracker;
         // Clone every sibling from the unchanged common baseline before any branch-specific
@@ -355,6 +358,7 @@ internal sealed partial class CombatBeamSolver
                     ? tracker.ExitQualityEpoch
                     : lease.ObservedExitQualityEpoch,
             };
+            SearchTriggers.Report("B2:AnnotateCycleExitProgress");
         }
     }
 
@@ -377,6 +381,7 @@ internal sealed partial class CombatBeamSolver
             lease.NextActionIndex,
             actionKey,
             MeasureCycleExitQuality(parent, child));
+        SearchTriggers.Report("B2:AttachCycleSchedulingEvidence");
     }
 
     private static void AttachPropagatedCycleExitProbe(SearchNode child)
@@ -413,6 +418,7 @@ internal sealed partial class CombatBeamSolver
             probe.OriginGeneration,
             MeasureCycleExitQuality(probe.OriginNode, child),
             completesProbe);
+        SearchTriggers.Report("B2:AttachCycleSchedulingEvidence");
         if (completesProbe)
             return;
         child.CycleExitProbe = probe with
@@ -432,6 +438,7 @@ internal sealed partial class CombatBeamSolver
     {
         if (child.CycleExitObservation is { } observation)
         {
+            SearchTriggers.Enter("B2:CommitCycleExitObservation");
             _ = observation.OriginTracker.ObserveExit(
                 observation.OriginPhaseIndex,
                 observation.ExitActionKey,
@@ -453,6 +460,7 @@ internal sealed partial class CombatBeamSolver
                     observation.OriginGeneration);
             }
             child.CycleExitObservation = null;
+            SearchTriggers.Report("B2:CommitCycleExitObservation");
         }
     }
 
@@ -464,6 +472,7 @@ internal sealed partial class CombatBeamSolver
         child.PendingCycleExitObservation = null;
         if (pending == null || !IsValidPendingCycleExitObservation(child, pending))
             return false;
+        SearchTriggers.Enter("B2:MaterializeAdmittedCycleExitObservation");
 
         CycleProbeLease currentLease = pending.OriginNode.CycleProbeLease!;
         long exitGeneration = pending.OriginTracker.ObserveExit(
@@ -501,6 +510,7 @@ internal sealed partial class CombatBeamSolver
             MaximumCycleExitProbeActions,
             CycleExitProbeActionBudget(activeEpoch),
             MaximumCycleExitProbeTurnTransitions);
+        SearchTriggers.Report("B2:MaterializeAdmittedCycleExitObservation");
         return true;
     }
 
@@ -809,6 +819,7 @@ internal sealed partial class CombatBeamSolver
 
     private void BeginCyclePlanningLayer()
     {
+        if (_run.CycleFamilyLedger.Count > 0) SearchTriggers.Enter("B2:BeginCyclePlanningLayer");
         // A serial parent can publish a better exit before the next parent is expanded, while
         // one parallel wave publishes every exit only after all parents are prepared. Advance at
         // most one requested epoch and freeze it at the deterministic play-depth boundary so both
@@ -845,7 +856,9 @@ internal sealed partial class CombatBeamSolver
             0,
             MaximumCycleFamilyImprovementEpoch);
         if (requested > ledger.RequestedImprovementEpoch)
+        {
             ledger.RequestedImprovementEpoch = requested;
+        }
     }
 
     private static bool TryRequestCycleFamilyImprovementEpochAtLeast(
@@ -871,17 +884,26 @@ internal sealed partial class CombatBeamSolver
         {
             return;
         }
+        SearchTriggers.Enter("B2:RequestRetainedCycleStartupImprovementEpoch");
+        _run.CycleFamilyLedger.TryGetValue(
+            lease.Tracker.FamilyKey, out CycleFamilyLedgerEntry? ledger);
+        byte priorRequestedEpoch = ledger?.RequestedImprovementEpoch ?? 0;
         _ = TryRequestCycleFamilyImprovementEpochAtLeast(
             _run.CycleFamilyLedger,
             lease.Tracker.FamilyKey,
             healthRiskBucket);
+        if (ledger != null && ledger.RequestedImprovementEpoch > priorRequestedEpoch)
+            SearchTriggers.Report("B2:RequestRetainedCycleStartupImprovementEpoch");
     }
 
     private static void AdvanceCycleFamilyImprovementEpochAtLayerStart(
         CycleFamilyLedgerEntry ledger)
     {
         if (ledger.EarnedImprovementEpoch < ledger.RequestedImprovementEpoch)
+        {
+            SearchTriggers.Report("B2:BeginCyclePlanningLayer");
             ledger.EarnedImprovementEpoch++;
+        }
         ledger.ActiveImprovementEpoch = ledger.EarnedImprovementEpoch;
     }
 
@@ -2272,6 +2294,7 @@ internal sealed partial class CombatBeamSolver
     {
         if (candidate.CycleExitProbe is not { RemainingActions: > 0 } probe)
             return true;
+        SearchTriggers.Enter("B2:TryConsumeCycleExitProbeExpansionBudget");
 
         int turnExpansionBudget = CyclePlanningPerTurnBudget();
         int budgetTurn = probe.OriginTracker.FamilyKey.Turn;
@@ -2290,6 +2313,7 @@ internal sealed partial class CombatBeamSolver
                 probe.OriginPhaseIndex,
                 probe.ExitActionKey,
                 probe.OriginGeneration);
+            SearchTriggers.Report("B2:TryConsumeCycleExitProbeExpansionBudget");
             return false;
         }
         int familyStartBudget = CycleFamilyProbeStartBudget(
@@ -2305,6 +2329,7 @@ internal sealed partial class CombatBeamSolver
                 probe.OriginPhaseIndex,
                 probe.ExitActionKey,
                 probe.OriginGeneration);
+            SearchTriggers.Report("B2:TryConsumeCycleExitProbeExpansionBudget");
             return false;
         }
         if (ledger.ProbeExpandedNodes >= familyExpansionBudget
@@ -2317,6 +2342,7 @@ internal sealed partial class CombatBeamSolver
                 probe.OriginPhaseIndex,
                 probe.ExitActionKey,
                 probe.OriginGeneration);
+            SearchTriggers.Report("B2:TryConsumeCycleExitProbeExpansionBudget");
             return false;
         }
 
@@ -2330,6 +2356,7 @@ internal sealed partial class CombatBeamSolver
             _run.CycleProbeExpandedNodesConsumedByTurn,
             budgetTurn,
             turnExpansionBudget);
+        SearchTriggers.Report("B2:TryConsumeCycleExitProbeExpansionBudget");
         return true;
     }
 
@@ -2453,11 +2480,16 @@ internal sealed partial class CombatBeamSolver
     }
 
     private static bool RequiresBoundedCyclePlanning(SearchNode node)
-        => node.Cycle is { } cycle
+    {
+        if (node.Cycle != null) SearchTriggers.Enter("B2:RequiresBoundedCyclePlanning");
+        bool required = node.Cycle is { } cycle
             && cycle.LastDelta.EnemyHp >= 0
             && cycle.LastDelta.EnemyBlock >= 0
             && !cycle.HasNewEnemyDurabilityProgress
             && cycle.LastDelta.AliveEnemyCount >= 0;
+        if (required) SearchTriggers.Report("B2:RequiresBoundedCyclePlanning");
+        return required;
+    }
 
     private bool ShouldStopCycleAtBudget(SearchNode candidate)
     {
@@ -2504,6 +2536,7 @@ internal sealed partial class CombatBeamSolver
 
     private bool ShouldRejectCycleCandidate(SearchNode candidate)
     {
+        if (candidate.Cycle != null) SearchTriggers.Enter("B2:ShouldRejectCycleCandidate");
         bool continuesCycle = IsCycleContinuation(candidate);
         bool unproductiveCycle = ShouldStopUnproductiveCycle(candidate);
         bool stoppedAsUnproductive = unproductiveCycle
@@ -2523,6 +2556,7 @@ internal sealed partial class CombatBeamSolver
             if (stoppedAsUnproductive) _run.CycleStoppedUnproductive++;
             else if (stoppedAtBudget) _run.CycleStoppedRepetitionBudget++;
             else _run.CycleStoppedFamilyBudget++;
+            SearchTriggers.Report("B2:ShouldRejectCycleCandidate");
             return true;
         }
         if (unproductiveCycle
@@ -2569,6 +2603,7 @@ internal sealed partial class CombatBeamSolver
         }
         if (count == 0)
             return false;
+        SearchTriggers.Enter("B2:AdmitExistingCycleProbeLease");
         ActionCandidate leased = count == 1
             ? single
             : SelectPreferredCycleAdmissionCandidate(
@@ -2578,6 +2613,7 @@ internal sealed partial class CombatBeamSolver
                 bestMaxHp)
                 ?? throw new InvalidOperationException("循环 admission 无法选择现有租约。");
         selected.Add(leased);
+        SearchTriggers.Report("B2:AdmitExistingCycleProbeLease");
         return true;
     }
 
@@ -2587,6 +2623,7 @@ internal sealed partial class CombatBeamSolver
     {
         if (candidates.Count == 0)
             return;
+        SearchTriggers.Enter("B2:AdmitCycleProbeCandidate");
         int bestMaxHp = candidates.Max(candidate => candidate.Node.Snapshot.PlayerMaxHp);
 
         // A lease issued before transposition owns the one bounded cycle lane for this
@@ -2623,10 +2660,13 @@ internal sealed partial class CombatBeamSolver
         // a normal candidate and it does not claim the observed recurrence is an infinite loop.
         EnsureBoundedCycleProbeLease(retained.Node);
         selected.Add(retained);
+        SearchTriggers.Report("B2:AdmitCycleProbeCandidate");
     }
 
     private void EnsureBoundedCycleProbeLease(SearchNode candidate)
     {
+        if (candidate.Cycle != null)
+            SearchTriggers.Enter("B2:EnsureBoundedCycleProbeLease");
         if (candidate.CycleProbeLease != null
             || candidate.CycleExitProbe != null
             || !RequiresBoundedCyclePlanning(candidate))
@@ -2635,6 +2675,7 @@ internal sealed partial class CombatBeamSolver
         }
         StartCycleProbeLease(candidate);
         _run.CycleCandidatesProtected++;
+        SearchTriggers.Report("B2:EnsureBoundedCycleProbeLease");
     }
 
     private static void AdmitCycleExitProbeCandidate(
@@ -2643,6 +2684,7 @@ internal sealed partial class CombatBeamSolver
     {
         if (candidates.Count == 0)
             return;
+        SearchTriggers.Enter("B2:AdmitCycleExitProbeCandidate");
         if (selected.Any(candidate => candidate.Node.CycleExitProbe != null))
             return;
         int bestMaxHp = candidates.Max(candidate => candidate.Node.Snapshot.PlayerMaxHp);
@@ -2659,7 +2701,10 @@ internal sealed partial class CombatBeamSolver
             .Select(candidate => (ActionCandidate?)candidate)
             .FirstOrDefault();
         if (retained is { } candidate)
+        {
             selected.Add(candidate);
+            SearchTriggers.Report("B2:AdmitCycleExitProbeCandidate");
+        }
     }
 
     private static SearchNode AttachCycleProbeLease(SearchNode child)
@@ -2699,11 +2744,13 @@ internal sealed partial class CombatBeamSolver
             CompletedRepetitions = lease.CompletedRepetitions
                 + (completedRepetition ? 1 : 0),
         };
+        SearchTriggers.Report("B2:AttachCycleSchedulingEvidence");
         return child;
     }
 
     private static void StartCycleProbeLease(SearchNode node)
     {
+        SearchTriggers.Enter("B2:StartCycleProbeLease");
         if (node.CycleProbeLease != null)
             return;
         CycleSearchState cycle = node.Cycle
@@ -2728,6 +2775,7 @@ internal sealed partial class CombatBeamSolver
             false,
             false,
             0);
+        SearchTriggers.Report("B2:StartCycleProbeLease");
     }
 
     internal static StateFingerprint BuildCycleActionKey(PlanAction action)

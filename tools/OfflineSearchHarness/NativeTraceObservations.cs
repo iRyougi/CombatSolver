@@ -5,32 +5,49 @@ using CombatSolver;
 namespace OfflineSearchHarness;
 
 /// <summary>
-/// Streams the retention evidence exposed by SearchPathObserver without holding search nodes.
-/// This is a partial trace: the observer does not report B2/B3/B4 trigger entry points.
+/// Streams retention evidence and records B2/B3 search gates without holding search nodes.
 /// </summary>
-internal sealed class NativeTraceObservations : IDisposable
+internal sealed class NativeTraceObservations : IDisposable, ISearchTriggerObserver
 {
     private static readonly JsonSerializerOptions Json = new(UnattendedTestFiles.JsonOptions)
     {
         WriteIndented = false,
     };
 
-    private readonly string _partialPath;
+    private readonly string _tracePath;
     private readonly string _rawPath;
     private readonly StreamWriter _writer;
     private readonly object _writeLock = new();
     private long _written;
+    private readonly HashSet<string> _triggered = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _entered = new(StringComparer.Ordinal);
 
     public SearchPathObserver Observer { get; }
 
     public NativeTraceObservations(string requestedPath)
     {
-        _partialPath = requestedPath + ".partial.json";
-        _rawPath = requestedPath + ".partial-observations.jsonl";
+        _tracePath = requestedPath;
+        _rawPath = requestedPath + ".observations.jsonl";
         Directory.CreateDirectory(Path.GetDirectoryName(requestedPath)!);
         _writer = new StreamWriter(new FileStream(_rawPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read));
         // Rich evaluation and ranking fields exist only on GlobalRetention observations.
         Observer = new SearchPathObserver(_ => false, Observe, _ => true);
+        SearchTriggers.Observer = this;
+    }
+
+    public void Triggered(string gate)
+    {
+        lock (_writeLock)
+        {
+            _triggered.Add(gate);
+            _entered.Add(gate);
+        }
+    }
+
+    public void Entered(string gate)
+    {
+        lock (_writeLock)
+            _entered.Add(gate);
     }
 
     private void Observe(SearchPathObservation observation)
@@ -71,7 +88,7 @@ internal sealed class NativeTraceObservations : IDisposable
         }
     }
 
-    public void WritePartial(SolverResult result)
+    public void WriteComplete(SolverResult result)
     {
         lock (_writeLock)
             _writer.Dispose();
@@ -140,21 +157,20 @@ internal sealed class NativeTraceObservations : IDisposable
         int[] unobservedSteps = Enumerable.Range(0, result.BestNode.Actions.Count + 1)
             .Except(observedSteps).ToArray();
 
-        using FileStream stream = new(_partialPath, FileMode.CreateNew, FileAccess.Write);
+        using FileStream stream = new(_tracePath, FileMode.CreateNew, FileAccess.Write);
         JsonSerializer.Serialize(stream, new
         {
-            schemaVersion = 1,
-            complete = false,
-            pending = "B1-PENDING-025",
-            reason = "SearchPathObserver exposes evaluations only at GlobalRetention and no B2/B3/B4 trigger events.",
-            triggered = (string[]?)null,
+            schemaVersion = 2,
+            complete = true,
+            triggered = _triggered.Order(StringComparer.Ordinal).ToArray(),
+            entered = _entered.Order(StringComparer.Ordinal).ToArray(),
             candidateStage = SearchPathObservationStage.GlobalRetention,
             route = result.BestNode.Actions.Select(ActionIdentity).ToArray(),
             turnSetupChoices = result.TurnSetupChoices.Select(ChoiceIdentity).ToArray(),
             nodes,
             unobservedSteps,
             rawObservationCount = _written,
-            rawObservationPath = _rawPath,
+            rawObservationPath = Path.GetFileName(_rawPath),
         }, Json);
     }
 
@@ -209,5 +225,10 @@ internal sealed class NativeTraceObservations : IDisposable
         => hash.AppendData(JsonSerializer.SerializeToUtf8Bytes(action with
         { RelicEffects = null, CardTitle = "", TargetName = "", PotionTitle = "" }, Json));
 
-    public void Dispose() => _writer.Dispose();
+    public void Dispose()
+    {
+        if (ReferenceEquals(SearchTriggers.Observer, this))
+            SearchTriggers.Observer = null;
+        _writer.Dispose();
+    }
 }

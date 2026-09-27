@@ -30,6 +30,11 @@ internal sealed partial class CombatBeamSolver
     {
         if (child.Parent is not { } parent || child.Action is not { } action)
             return child;
+        if (parent.OrderedMutationLineage != null || parent.OrderedMutationRetentionLease != null
+            || parent.OrderedMutationObservationStepsRemaining > 0
+            || action.Choice != null || action.NestedChoices is { Count: > 0 }
+            || action.TurnStartChoices is { Count: > 0 })
+            SearchTriggers.Enter("B2:AttachOrderedMutationLineage");
 
         // Activation is a one-prune scheduling transaction, not semantic lineage. In
         // particular, record `with` copies used by test/search helpers must not extend it.
@@ -79,6 +84,10 @@ internal sealed partial class CombatBeamSolver
             child.OrderedMutationLeaseTransitionPending = true;
             child.OrderedMutationAdmissionCharged = false;
         }
+        if (completedBoundaryLineage != null || liveLineage != null
+            || parent.OrderedMutationRetentionLease != null
+            || parent.OrderedMutationObservationStepsRemaining > 0)
+            SearchTriggers.Report("B2:AttachOrderedMutationLineage");
         return child;
     }
 
@@ -549,6 +558,7 @@ internal sealed partial class CombatBeamSolver
         SearchNode node,
         bool hasProgressEvidence)
     {
+        if (hasProgressEvidence) SearchTriggers.Enter("B2:PromoteOrderedMutationProgressTail");
         if (!hasProgressEvidence
             || node.OrderedMutationRetentionLease is not { } lease
             || lease.ProgressTailEligible
@@ -563,6 +573,7 @@ internal sealed partial class CombatBeamSolver
         {
             ProgressTailEligible = true,
         };
+        SearchTriggers.Report("B2:PromoteOrderedMutationProgressTail");
     }
 
     private static int OrderedMutationRootAdmissionLimit(
@@ -765,6 +776,7 @@ internal sealed partial class CombatBeamSolver
             return false;
         }
         node.OrderedMutationAdmissionCharged = true;
+        SearchTriggers.Report("B2:FinalizeOrderedMutationPortfolio");
         return true;
     }
 
@@ -848,6 +860,9 @@ internal sealed partial class CombatBeamSolver
 
     private void FinalizeOrderedMutationPortfolio(List<SearchNode> selected)
     {
+        if (selected.Any(node => node.OrderedMutationAdmissionPending
+                || node.OrderedMutationActivationTicket != null))
+            SearchTriggers.Enter("B2:FinalizeOrderedMutationPortfolio");
         foreach (IGrouping<StateFingerprint, SearchNode> activation in selected
                      .Where(node => node.OrderedMutationActivationTicket is { })
                      .GroupBy(node => node.OrderedMutationActivationTicket!.Key)
@@ -921,6 +936,7 @@ internal sealed partial class CombatBeamSolver
                         _run.OrderedMutationOrdinaryFallbacks + 1);
                 }
                 ExpireOrderedMutationSchedulingLeaseForOrdinaryFallback(node);
+                SearchTriggers.Report("B2:FinalizeOrderedMutationPortfolio");
                 if (portfolioOnly)
                     selected.Remove(node);
             }
@@ -950,6 +966,7 @@ internal sealed partial class CombatBeamSolver
                 _run.OrderedMutationOrdinaryFallbacks = checked(
                     _run.OrderedMutationOrdinaryFallbacks + 1);
                 ExpireOrderedMutationSchedulingLeaseForOrdinaryFallback(node);
+                SearchTriggers.Report("B2:FinalizeOrderedMutationPortfolio");
             }
             else
             {
@@ -960,7 +977,8 @@ internal sealed partial class CombatBeamSolver
                 rejectedPending.Add(node);
             }
         }
-        selected.RemoveAll(rejectedPending.Contains);
+        if (selected.RemoveAll(rejectedPending.Contains) > 0)
+            SearchTriggers.Report("B2:FinalizeOrderedMutationPortfolio");
         // Commit source coverage only for the final ordered frontier; rejected atomic work must
         // not bias later handoffs.
         int pendingSourceAdmissions =
@@ -1110,6 +1128,7 @@ internal sealed partial class CombatBeamSolver
         OrderedMutationRetentionLease lease,
         out int rootAdmissions)
     {
+        SearchTriggers.Enter("B2:TryConsumeOrderedMutationAdmission");
         _ = admissionsByRootLease.TryGetValue(lease.RootKey, out rootAdmissions);
         _ = admissionsByInitialLease.TryGetValue(
             lease.InitialKey,
@@ -1129,6 +1148,7 @@ internal sealed partial class CombatBeamSolver
         admissionsByInitialLease[lease.InitialKey] = initialAdmissions;
         admissionsByLease[lease.Key] = leaseAdmissions;
         runAdmissions = checked(runAdmissions + 1);
+        SearchTriggers.Report("B2:TryConsumeOrderedMutationAdmission");
         return true;
     }
 

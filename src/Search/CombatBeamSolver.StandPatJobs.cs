@@ -21,6 +21,7 @@ internal sealed partial class CombatBeamSolver
         }
         if (pending.Count < 2)
             return;
+        SearchTriggers.Enter("B2:PrepareStandPatProbes");
         // Metadata before the probe group has completed with no lane in flight.
         _run.CheckpointPruneMetadata?.Invoke("stand_pat");
         for (int start = 0; start < pending.Count;)
@@ -46,6 +47,7 @@ internal sealed partial class CombatBeamSolver
             {
                 _run.StandPatCache.Add(batch[index].StateKey, evaluations[index]);
                 _run.StandPatProbes++;
+                SearchTriggers.Report("B2:PrepareStandPatProbes");
             }
             // EvaluateStandPatProbes waits for every lane's completion signal before returning.
             // The next iteration may therefore reclaim without racing a worker or losing roots.

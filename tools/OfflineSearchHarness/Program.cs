@@ -205,11 +205,6 @@ internal static class Program
                 File.WriteAllText(
                     Path.Combine(options.OutputDirectory, "route.json"),
                     JsonSerializer.Serialize(outcome.RouteActions, UnattendedTestFiles.JsonOptions));
-                if (options.ExportTracePath != null)
-                    throw new NotSupportedException(
-                        "B1-PENDING-025: complete native trace cannot be exported because "
-                        + "SearchPathObserver does not expose B2/B3/B4 triggers. "
-                        + $"Partial evidence: {options.ExportTracePath}.partial.json");
 
                 reached = "M2";
                 if (Environment.GetEnvironmentVariable("OFFLINE_HARNESS_ANCILLARY_CHECKS") == "1")
@@ -409,7 +404,7 @@ internal sealed record HarnessOptions
           --milestone <M1|M2>    跑到哪个里程碑（默认 M2）
           --out <dir>            产物目录（默认 <workspace>/offline）
           --export-root <path>   玩家第一回合根状态 JSON（schema 1）
-          --export-trace <path>  导出已观察到的路线/保留候选到 <path>.partial.json；完整触发清单待 B1-PENDING-025
+          --export-trace <path>  导出路线、保留候选和 B2/B3 的 triggered/entered 门控到指定 JSON 路径
           --workspace <dir>      工作区目录（默认 .local/offline-harness）
           --language <code>      本地化语言码（默认 eng）
           --verbose-game-log     把游戏 info/debug 日志也打到标准输出

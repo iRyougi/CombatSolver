@@ -91,6 +91,7 @@ internal sealed partial class CombatBeamSolver
         }
         if (regions.Count == 0)
             return null;
+        SearchTriggers.Enter("B2:ApplyCycleRegionRetention");
 
         CycleRegionRetentionTransaction transaction = new(_run);
 
@@ -293,6 +294,7 @@ internal sealed partial class CombatBeamSolver
                 throw new InvalidOperationException(
                     "同一循环 region 节点被重复登记 provisional admission。");
             }
+            SearchTriggers.Report("B2:ApplyCycleRegionRetention");
 
             int regionRank = admittedByRegion.GetValueOrDefault(representative.Batch.Region);
             admittedByRegion[representative.Batch.Region] = regionRank + 1;
@@ -300,9 +302,10 @@ internal sealed partial class CombatBeamSolver
             admittedRanks[representative.Node] = _profile.BeamWidth + 16 + regionRank;
         }
 
-        selected.RemoveAll(node => !IsCycleRegionBudgetExempt(node)
+        int removedByRegion = selected.RemoveAll(node => !IsCycleRegionBudgetExempt(node)
             && TryBuildCycleRegionKey(node, out _)
             && !admitted.Contains(node));
+        if (removedByRegion > 0) SearchTriggers.Report("B2:ApplyCycleRegionRetention");
         HashSet<SearchNode> retained = new(selected, ReferenceEqualityComparer.Instance);
         foreach (SearchNode candidate in admitted
                      .OrderBy(node => admittedRanks[node])
@@ -527,6 +530,7 @@ internal sealed partial class CombatBeamSolver
     {
         if (transaction == null)
             return;
+        SearchTriggers.Enter("B2:FinalizeCycleRegionRetention");
 
         HashSet<SearchNode> retainedSet = new(
             retained,
@@ -591,6 +595,7 @@ internal sealed partial class CombatBeamSolver
                 committed = new CycleRegionLedgerEntry();
                 _run.CycleRegionLedger.Add(batch.Region, committed);
                 _run.CycleRegionsDetected++;
+                SearchTriggers.Report("B2:FinalizeCycleRegionRetention");
             }
 
             // Provisional candidates which disappeared in later arbitration must not mint an
@@ -601,6 +606,7 @@ internal sealed partial class CombatBeamSolver
             ObserveCycleRegionProgress(finalObservation, survivorsByBatch[batch]);
             int priorProgressEpochs = committed.ProgressEpochs;
             CommitCycleRegionObservation(finalObservation, committed);
+            SearchTriggers.Report("B2:FinalizeCycleRegionRetention");
             int earnedProgressEpochs = checked(
                 committed.ProgressEpochs - priorProgressEpochs);
             if (earnedProgressEpochs < 0)
@@ -648,6 +654,7 @@ internal sealed partial class CombatBeamSolver
 
             _run.CycleRegionCandidatesAdmitted = checked(
                 _run.CycleRegionCandidatesAdmitted + 1);
+            SearchTriggers.Report("B2:FinalizeCycleRegionRetention");
             admittedByBatch[batch] = checked(
                 admittedByBatch.GetValueOrDefault(batch) + 1);
             switch (admission.Kind)
@@ -701,6 +708,9 @@ internal sealed partial class CombatBeamSolver
             if (batch.ProgressRepresentative == null
                 || !retainedSet.Contains(batch.ProgressRepresentative))
             {
+                if (ledger.ProgressContinuationNode != null
+                    || ledger.ProgressActionsRemaining != 0)
+                    SearchTriggers.Report("B2:FinalizeCycleRegionRetention");
                 ledger.ProgressContinuationNode = null;
                 ledger.ProgressActionsRemaining = 0;
             }

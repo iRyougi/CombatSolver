@@ -44,6 +44,7 @@ internal sealed partial class CombatBeamSolver
         long remaining = Math.Max(1L, (long)seed.Snapshot.EnemyHp + seed.Snapshot.EnemyBlock);
         int limit = (int)Math.Min(_replayWork.RemainingCycleReplayActions,
             Math.Max(sequence.Length, (remaining / damage + 2) * sequence.Length));
+        SearchTriggers.Enter("B2:TryReplayCycle");
         SearchNode current = seed;
         bool published = false;
         try
@@ -104,6 +105,7 @@ internal sealed partial class CombatBeamSolver
                     // An alternative card before the first action does not burn this region.
                     _run.CycleReplayRegions.Add(region);
                     _run.CycleReplayAttempts++;
+                    SearchTriggers.Report("B2:TryReplayCycle");
                 }
                 SimulationSnapshot snapshot = ReplayAction(current, action);
                 _run.CycleReplayActions++;

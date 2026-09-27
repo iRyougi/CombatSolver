@@ -509,7 +509,7 @@ internal static class ModRuntime
         if (options.SearchMode == "Coordinator" && policy.MeasurePhasePerformance)
             LastPhasePerformance = SolverDiagnostics.DescribeSearchPhasePerformance(result);
         orderingObservations?.WriteSelectedPath(options.OutputDirectory, result);
-        nativeTraceObservations?.WritePartial(result);
+        nativeTraceObservations?.WriteComplete(result);
         HarnessLog.Trace("solved");
         watch.Stop();
         File.WriteAllText(Path.Combine(options.OutputDirectory, "quality.json"), JsonSerializer.Serialize(new

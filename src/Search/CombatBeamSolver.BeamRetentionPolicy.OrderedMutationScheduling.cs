@@ -215,6 +215,7 @@ internal sealed partial class CombatBeamSolver
             List<SearchNode> selected,
             HashSet<SearchNode> selectedSet)
         {
+            if (cohort.Candidates.Count > 0) SearchTriggers.Enter("B2:AddOrderedMutationPortfolio");
             if (cohort.Candidates.Count != 2
                 || cohort.Candidates[0].SequenceKey == cohort.Candidates[1].SequenceKey
                 || !CanReserveOrderedMutationAdmissions(
@@ -235,6 +236,7 @@ internal sealed partial class CombatBeamSolver
                 };
                 candidate.Node.OrderedMutationActivationTicket = ticket;
                 candidate.Node.OrderedMutationAdmissionPending = true;
+                SearchTriggers.Report("B2:AddOrderedMutationPortfolio");
                 if (alreadySelected)
                 {
                     _run.PendingOrderedMutationOrdinaryFallbackNodes.Add(
@@ -908,6 +910,7 @@ internal sealed partial class CombatBeamSolver
             Func<OrderedMutationAdmissionClaimReason, bool> tryAdmit,
             out OrderedMutationAdmissionClaimReason selected)
         {
+            if (reasons.Count > 0) SearchTriggers.Enter("B2:TrySelectOrderedMutationAdmissionReason");
             foreach (OrderedMutationAdmissionClaimReason reason in reasons.Order())
             {
                 bool available = reason switch
@@ -927,6 +930,7 @@ internal sealed partial class CombatBeamSolver
                 if (!available || !tryAdmit(reason))
                     continue;
                 selected = reason;
+                SearchTriggers.Report("B2:TrySelectOrderedMutationAdmissionReason");
                 return true;
             }
             selected = default;
@@ -1672,6 +1676,7 @@ internal sealed partial class CombatBeamSolver
             ref int reservedRunAdmissions)
         {
             int count = packet.Candidates.Count;
+            if (count > 0) SearchTriggers.Enter("B2:AddOrderedMutationPortfolio");
             if (count == 0
                 || count > MaximumOrderedMutationContinuationsPerLineagePerPrune
                 || packet.Candidates.Any(HasPaidOrderedMutationAdmission)
@@ -1735,6 +1740,7 @@ internal sealed partial class CombatBeamSolver
                 candidate.OrderedMutationRetentionLease = admissionLeases[index];
                 candidate.OrderedMutationLeaseTransitionPending = false;
                 candidate.OrderedMutationAdmissionPending = true;
+                SearchTriggers.Report("B2:AddOrderedMutationPortfolio");
                 if (selectedSet.Add(candidate))
                     selected.Add(candidate);
                 else
@@ -1811,8 +1817,10 @@ internal sealed partial class CombatBeamSolver
         {
             if (!transitionPending)
                 return inherited;
+            SearchTriggers.Enter("B2:CommitOrderedMutationLeaseTransition");
             if (!transitionOccurred)
                 return inherited;
+            SearchTriggers.Report("B2:CommitOrderedMutationLeaseTransition");
             return new OrderedMutationRetentionLease(
                 inherited.RootKey,
                 inherited.InitialKey,

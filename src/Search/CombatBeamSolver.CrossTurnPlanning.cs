@@ -35,6 +35,8 @@ internal sealed partial class CombatBeamSolver
                 LastTurnImproved = progressMagnitude > probe.BestKnownProgressMagnitude,
             };
         }
+        if (canPropagateProbe)
+            SearchTriggers.Report("B2:AttachCycleSchedulingEvidence");
         return child;
     }
 
@@ -49,6 +51,7 @@ internal sealed partial class CombatBeamSolver
         if (!ReferenceEquals(FindTurnStart(turnStart), turnStart))
             throw new InvalidOperationException("跨回合 stand-pat 基线只能属于回合起点节点。");
 
+        SearchTriggers.Enter("B2:PublishCrossTurnStandPatBaselines");
         if (baselines.Count == 0)
         {
             turnStart.CrossTurnStandPatBaselines = [];
@@ -62,6 +65,7 @@ internal sealed partial class CombatBeamSolver
                 distinct.Add(baseline);
         }
         turnStart.CrossTurnStandPatBaselines = distinct.ToArray();
+        SearchTriggers.Report("B2:PublishCrossTurnStandPatBaselines");
     }
 
     private static void AttachCrossTurnSemanticStateEvidence(
@@ -72,6 +76,7 @@ internal sealed partial class CombatBeamSolver
     {
         if (node.CrossTurnSemanticEvidenceAttached || standPatKeys.Count == 0)
             return;
+        SearchTriggers.Enter("B2:AttachCrossTurnSemanticStateEvidence");
 
         // Every key is a comparable direct EndTurn branch from the same turn start. Matching
         // any branch means that the observed difference can be explained by stand-pat branch
@@ -85,6 +90,7 @@ internal sealed partial class CombatBeamSolver
             break;
         }
         node.CrossTurnSemanticEvidenceAttached = true;
+        SearchTriggers.Report("B2:AttachCrossTurnSemanticStateEvidence");
         node.CrossTurnSemanticStateChanged = changed;
         CycleExitQuality candidateQuality = MeasureCycleExitQuality(turnStart, node);
         bool modeledQualityDominatedByStandPat = false;
@@ -121,6 +127,7 @@ internal sealed partial class CombatBeamSolver
 
     private void StartCrossTurnProbe(SearchNode node)
     {
+        SearchTriggers.Enter("B2:StartCrossTurnProbe");
         if (node.CrossTurnProbe != null)
             return;
         node.CrossTurnProbe = new CrossTurnProbeState(
@@ -132,6 +139,7 @@ internal sealed partial class CombatBeamSolver
             false,
             node.CrossTurnSemanticStateChanged);
         _run.CrossTurnCandidatesProtected++;
+        SearchTriggers.Report("B2:StartCrossTurnProbe");
     }
 
     private static bool RequiresCrossTurnPlanning(SearchNode node)
@@ -143,7 +151,10 @@ internal sealed partial class CombatBeamSolver
         {
             return false;
         }
-        return node.CombatProgress.TurnsWithoutProgress > 0
+        SearchTriggers.Enter("B2:RequiresCrossTurnPlanning");
+        bool required = node.CombatProgress.TurnsWithoutProgress > 0
             || node.CrossTurnSemanticInvisibleToModeledQuality;
+        if (required) SearchTriggers.Report("B2:RequiresCrossTurnPlanning");
+        return required;
     }
 }

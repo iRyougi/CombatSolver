@@ -84,6 +84,7 @@ internal sealed partial class CombatBeamSolver
             insertionIndex + 1,
             originalActions.Length - insertionIndex);
 
+        SearchTriggers.Enter("B3:TryInsertBlockPotion");
         SearchNode? inserted = ReplayAdjustedRoute(
             insertedActions,
             original.GetTurnSetupChoices(),
@@ -115,6 +116,7 @@ internal sealed partial class CombatBeamSolver
             $"turn={targetTurn.Turn} slot={selectedPotion.Slot} " +
             $"turn_hp_lost={targetTurn.HpLost} hp_saved={hpSaved} " +
             $"expanded_nodes_added=0");
+        SearchTriggers.Report("B3:TryInsertBlockPotion");
         return new BlockPotionInsertion(
             inserted,
             insertedAnnotations,

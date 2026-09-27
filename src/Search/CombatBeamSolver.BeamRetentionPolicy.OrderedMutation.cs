@@ -54,6 +54,7 @@ internal sealed partial class CombatBeamSolver
                 OrderedMutationLineage? lineage = OrderedMutationCollisionLineage(node);
                 if (node.OrderedMutationRetentionLease != null || lineage == null)
                     continue;
+                SearchTriggers.Enter("B2:AddOrderedMutationPortfolio");
                 // A completed source segment deliberately has the old turn number while its
                 // visible unordered outcome belongs to the post-boundary child.
                 if (node.OrderedMutationBoundaryLineage == null && lineage.Turn != node.Turn)
@@ -154,6 +155,7 @@ internal sealed partial class CombatBeamSolver
                 .Where(node => node.OrderedMutationRetentionLease != null
                     && !HasPaidOrderedMutationAdmission(node))
                 .ToArray();
+            if (naturallySelectedLeaseNodes.Length > 0) SearchTriggers.Enter("B2:AddOrderedMutationPortfolio");
 
             coldActivationCohorts.Sort(CompareOrderedMutationActivationCohorts);
             OrderedMutationActivationCohort? initiallyAdmittedColdCohort = null;
@@ -182,6 +184,7 @@ internal sealed partial class CombatBeamSolver
                     continue;
                 }
                 admissions += 2;
+                SearchTriggers.Report("B2:AddOrderedMutationPortfolio");
                 initiallyAdmittedColdCohort = cohort;
                 break;
             }
@@ -825,6 +828,7 @@ internal sealed partial class CombatBeamSolver
                     return false;
                 }
                 admissions++;
+                SearchTriggers.Report("B2:AddOrderedMutationPortfolio");
                 claimCandidate.OrderedMutationAdmissionSequence = pendingAdmissionSequence++;
                 IncrementOrderedMutationAdmissionReason(
                     admissionReason,
@@ -974,6 +978,7 @@ internal sealed partial class CombatBeamSolver
                     continue;
                 }
                 admissions += 2;
+                SearchTriggers.Report("B2:AddOrderedMutationPortfolio");
             }
             // Any inherited lane left outside this prune's paid/pending portfolio has exhausted
             // (or lost) scheduling eligibility. Clear only scheduling state before CycleRegion
@@ -992,6 +997,7 @@ internal sealed partial class CombatBeamSolver
                             _run.OrderedMutationOrdinaryFallbacks + 1);
                     }
                     ExpireOrderedMutationSchedulingLeaseForOrdinaryFallback(candidate);
+                    SearchTriggers.Report("B2:AddOrderedMutationPortfolio");
                 }
             }
             if (admissions > admissionLimit)
@@ -1020,6 +1026,8 @@ internal sealed partial class CombatBeamSolver
             IReadOnlyList<SearchNode> pool,
             IReadOnlyList<SearchNode> retained)
         {
+            if (pool.Count > 0 || retained.Count > 0)
+                SearchTriggers.Enter("B2:ArmOrderedMutationObservationBridges");
             HashSet<SearchNode> retainedSet = new(
                 retained,
                 ReferenceEqualityComparer.Instance);
@@ -1030,7 +1038,9 @@ internal sealed partial class CombatBeamSolver
             {
                 if (!candidate.OrderedMutationLeaseTransitionPending)
                     continue;
+                SearchTriggers.Enter("B2:ArmOrderedMutationObservationBridges");
                 ExpireOrderedMutationSchedulingLeaseForOrdinaryFallback(candidate);
+                SearchTriggers.Report("B2:ArmOrderedMutationObservationBridges");
             }
 
             // A handoff is one obligation owned by the exact semantic parent, not one
@@ -1065,6 +1075,7 @@ internal sealed partial class CombatBeamSolver
                      retainedHandoffFulfillments)
             {
                 RequestOrderedMutationObservation(fulfillment.Node);
+                SearchTriggers.Report("B2:ArmOrderedMutationObservationBridges");
                 fulfilledHandoffs.Add(fulfillment.Obligation);
             }
             foreach (OrderedMutationParentObligationCandidate candidate in retainedHandoffCandidates)
@@ -1135,6 +1146,7 @@ internal sealed partial class CombatBeamSolver
                         ? candidate
                         : best);
                 survivor.OrderedMutationContinuationBridge = true;
+                SearchTriggers.Report("B2:ArmOrderedMutationObservationBridges");
             }
 
             // If ordinary ranking already retained a different child of the observed parent,
@@ -1165,6 +1177,7 @@ internal sealed partial class CombatBeamSolver
                 foreach (SearchNode survivor in survivors)
                     survivor.OrderedMutationContinuationBridge = false;
                 carrier.OrderedMutationContinuationBridge = true;
+                SearchTriggers.Report("B2:ArmOrderedMutationObservationBridges");
             }
         }
 
@@ -1711,6 +1724,7 @@ internal sealed partial class CombatBeamSolver
                 candidate.OrderedMutationRetentionLease = leases[index];
                 candidate.OrderedMutationLeaseTransitionPending = false;
                 candidate.OrderedMutationAdmissionPending = true;
+                SearchTriggers.Report("B2:AddOrderedMutationPortfolio");
                 if (selectedSet.Add(candidate))
                     selected.Add(candidate);
                 else

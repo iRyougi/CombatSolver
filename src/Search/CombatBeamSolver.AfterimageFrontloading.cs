@@ -31,6 +31,7 @@ internal sealed partial class CombatBeamSolver
         if (!HasDelayedAfterimage(actions))
             return null;
 
+        SearchTriggers.Enter("B2:TryFrontloadAfterimages");
         SearchNode? candidate = ReplayAdjustedRoute(
             actions,
             original.GetTurnSetupChoices(),
@@ -81,6 +82,7 @@ internal sealed partial class CombatBeamSolver
         policy.Diagnostics.Info(
             $"[CombatSolver/Test] AFTERIMAGE_ROUTE_FRONTLOADED " +
             $"hp_saved={hpSaved} expanded_nodes_added=0");
+        SearchTriggers.Report("B2:TryFrontloadAfterimages");
         return new AfterimageFrontloading(
             candidate,
             BuildRouteAnnotations(candidate),
