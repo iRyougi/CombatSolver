@@ -62,7 +62,12 @@ internal sealed class SearchPolicyOverrides
             FinalBossHpStrategy = Value("finalBossHpStrategy", settings.FinalBossHpStrategy),
             AcceptableBattleHpLoss = Value("acceptableBattleHpLoss", settings.AcceptableBattleHpLoss),
             StopAtAcceptableBattleHpLoss = Value("stopAtAcceptableBattleHpLoss", settings.StopAtAcceptableBattleHpLoss),
-            SearchBeamWidth = Value("searchBeamWidth", settings.SearchBeamWidth),
+            // Legacy split widths only take effect when the unified field is absent.
+            SearchBeamWidth = Root.TryGetProperty("searchBeamWidth", out _)
+                ? Value("searchBeamWidth", settings.SearchBeamWidth)
+                : Root.TryGetProperty("searchPotionFreeBeamWidth", out _)
+                    || Root.TryGetProperty("searchPotionBeamWidth", out _)
+                    ? null : settings.SearchBeamWidth,
             SearchPotionFreeBeamWidth = Value("searchPotionFreeBeamWidth", settings.SearchPotionFreeBeamWidth),
             SearchPotionBeamWidth = Value("searchPotionBeamWidth", settings.SearchPotionBeamWidth),
             SearchMaxExpandedNodes = Value("searchMaxExpandedNodes", settings.SearchMaxExpandedNodes),
