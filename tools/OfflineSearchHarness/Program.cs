@@ -370,6 +370,7 @@ internal sealed record HarnessOptions
           --dop <int>            搜索并行度（默认 1）
           --budget-ms <int>      搜索预算毫秒（默认 600000）
           --potion-policy <p>    药水政策（默认 Smart）
+          --search-policy <json> 按 SolverSettings 字段名覆盖策略与搜索预算
           --search-mode <m>      Evaluate（单次求解，不经协调器，默认）| Coordinator（生产协调器）
           --use-portfolio        开宽度组合（只对 --search-mode Coordinator 有效）
           --no-plain-baseline    消融：丢掉普通基线成员（需 --use-portfolio）
@@ -423,6 +424,7 @@ internal sealed record HarnessOptions
     public int MaxDegreeOfParallelism { get; init; } = 1;
     public int BudgetMilliseconds { get; init; } = 600_000;
     public string PotionPolicy { get; init; } = "Smart";
+    public string? SearchPolicyPath { get; init; }
     public string SearchMode { get; init; } = "Evaluate";
     /// <summary>开宽度组合（协调器的组合成员通道）；Evaluate 模式下没有意义。</summary>
     public bool UsePortfolio { get; init; }
@@ -501,6 +503,7 @@ internal sealed record HarnessOptions
         string potionPolicy = "Smart", milestone = "M2", language = "eng";
         string profile = "Custom", searchMode = "Evaluate", label = "offline";
         string? output = null, requestPath = null, exportRootPath = null, exportTracePath = null;
+        string? searchPolicyPath = null;
         string workspace = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory, "../../../../../.local/offline-harness"));
         bool verbose = false;
@@ -532,6 +535,7 @@ internal sealed record HarnessOptions
                 case "--dop": dop = int.Parse(Value()); break;
                 case "--budget-ms": budget = int.Parse(Value()); break;
                 case "--potion-policy": potionPolicy = Value(); break;
+                case "--search-policy": searchPolicyPath = Path.GetFullPath(Value()); break;
                 case "--search-mode": searchMode = Value(); break;
                 case "--use-portfolio": usePortfolio = true; break;
                 case "--no-plain-baseline": noPlainBaseline = true; break;
@@ -659,6 +663,7 @@ internal sealed record HarnessOptions
             MaxDegreeOfParallelism = dop,
             BudgetMilliseconds = budget,
             PotionPolicy = potionPolicy,
+            SearchPolicyPath = searchPolicyPath,
             SearchMode = searchMode,
             UsePortfolio = usePortfolio,
             NoPlainBaselineMember = noPlainBaseline,

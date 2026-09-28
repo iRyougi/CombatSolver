@@ -13,6 +13,7 @@ plan 是一个数组，每项：
   maxDegreeOfParallelism                  可选，搜索并行度（默认 1）
   searchBudgetMilliseconds                可选，搜索预算毫秒（默认 600000）
   potionPolicy                            可选，默认 Smart
+  searchPolicy                            可选，覆盖 SolverSettings 字段的 JSON 路径
   searchMode                              可选，Evaluate（默认，单次求解）| Coordinator（生产协调器）
   usePortfolio                            可选，true 时开宽度组合（只对 Coordinator 有效）
   measurePhases                           可选，true 时记 SEARCH_PHASE 阶段表
@@ -62,6 +63,8 @@ def build_command(item, out, harness):
                       ('transpositionEntryLimit', '--transposition-entry-limit')):
         if item.get(key) is not None:
             args += [flag, str(item[key])]
+    if item.get('searchPolicy'):
+        args += ['--search-policy', str(Path(item['searchPolicy']).resolve(strict=True))]
     if item.get('exportRoot'):
         args += ['--export-root', str(out / 'root.json')]
     if item.get('usePortfolio'):

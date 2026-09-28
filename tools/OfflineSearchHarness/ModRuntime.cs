@@ -39,6 +39,7 @@ internal static class ModRuntime
 
     /// <summary>离线会话作用域；释放即把无人测试口径还原（进程退出前 Program 负责释放）。</summary>
     public static IDisposable? Session { get; private set; }
+    private static SearchPolicyOverrides? PolicyOverrides { get; set; }
 
     public static string Initialize(HarnessOptions options)
     {
@@ -110,7 +111,8 @@ internal static class ModRuntime
     private static void ApplyFixedBudgetSettings(HarnessOptions options)
     {
         SolverSearchProfile profile = ResolveProfile(options);
-        SolverSettings.ApplyForTesting(new SolverSettingsData
+        PolicyOverrides = SearchPolicyOverrides.Load(options.SearchPolicyPath);
+        SolverSettingsData settings = new SolverSettingsData
         {
             PerformanceMigrationVersion = SolverSettings.CurrentPerformanceMigrationVersion,
             PerformancePreset = SolverPerformancePreset.Custom,
@@ -129,7 +131,8 @@ internal static class ModRuntime
             OnlineStatisticsEnabled = false,
             SearchCompletionNotificationsEnabled = false,
             PotionPolicy = Enum.Parse<SolverPotionPolicy>(options.PotionPolicy, ignoreCase: true),
-        });
+        };
+        SolverSettings.ApplyForTesting(PolicyOverrides?.Apply(settings) ?? settings);
     }
 
     /// <summary>
@@ -281,6 +284,7 @@ internal static class ModRuntime
         policy.Profile,
         policy.PotionPolicy,
         policy.PotionStrategy,
+        policy.PredictPotionReward,
         policy.FixedBudget,
         policy.MaxDegreeOfParallelism,
         policy.IncludeTurnSetup,
@@ -389,6 +393,8 @@ internal static class ModRuntime
         SolverSettingsSnapshot settings = SolverSettings.Capture();
         SearchPolicySnapshot policy = SolverController.CaptureSearchPolicy(
             settings, state, includeTurnSetup: false, theftPolicy: null);
+        if (PolicyOverrides != null)
+            policy = PolicyOverrides.ApplyToRoot(policy, state);
         policy = policy with { Profile = policy.Profile with
         {
             BaseScoreOnly = options.Ordering == "base",
@@ -492,7 +498,8 @@ internal static class ModRuntime
                 result = options.SearchMode == "Coordinator"
                     ? CombatSearchCoordinator.Solve(root, names, damage, policy, CancellationToken.None, diagnosticProgress)
                     : SolveEvaluate(root, names, damage, policy, settings,
-                        options.BudgetMilliseconds, loop, out describedPolicy, ref timeBoundary);
+                        PolicyOverrides?.TimeLimitMilliseconds ?? options.BudgetMilliseconds,
+                        loop, out describedPolicy, ref timeBoundary);
             }
             finally
             {
@@ -504,7 +511,8 @@ internal static class ModRuntime
             result = options.SearchMode == "Coordinator"
                 ? CombatSearchCoordinator.Solve(root, names, damage, policy, CancellationToken.None, diagnosticProgress)
                 : SolveEvaluate(root, names, damage, policy, settings,
-                    options.BudgetMilliseconds, loop, out describedPolicy, ref timeBoundary);
+                    PolicyOverrides?.TimeLimitMilliseconds ?? options.BudgetMilliseconds,
+                    loop, out describedPolicy, ref timeBoundary);
         }
         if (options.SearchMode == "Coordinator" && policy.MeasurePhasePerformance)
             LastPhasePerformance = SolverDiagnostics.DescribeSearchPhasePerformance(result);
